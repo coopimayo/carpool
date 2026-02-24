@@ -1,13 +1,19 @@
-from .distance import haversine_km, route_distance_km
-from .models import Driver, Location, Passenger, Route
-from .tsp import nearest_neighbor_tsp
+from carpool.distance import route_distance_km
+from carpool.models import Driver, Location, Passenger, Route
+from carpool.providers.base import DistanceProvider
+from carpool.providers.haversine import HaversineProvider
+from carpool.tsp import nearest_neighbor_tsp
 
 
 def assign_passengers_to_drivers(
     drivers: list[Driver],
     passengers: list[Passenger],
     destination: Location | None = None,
+    provider: DistanceProvider | None = None,
 ) -> tuple[list[Route], list[Passenger]]:
+    if provider is None:
+        provider = HaversineProvider()
+
     remaining_passengers = passengers.copy()
     routes: list[Route] = []
 
@@ -27,7 +33,7 @@ def assign_passengers_to_drivers(
 
             nearest = min(
                 fitting_passengers,
-                key=lambda passenger: haversine_km(anchor, passenger.location),
+                key=lambda passenger: provider.distance_km(anchor, passenger.location),
             )
             assigned.append(nearest)
             remaining_passengers.remove(nearest)
@@ -37,6 +43,7 @@ def assign_passengers_to_drivers(
         ordered_pickups = nearest_neighbor_tsp(
             driver.location,
             [passenger.location for passenger in assigned],
+            provider=provider,
         )
 
         pickup_order: list[Passenger] = []

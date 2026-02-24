@@ -1,0 +1,28 @@
+version: "3.8"
+
+services:
+  osrm:
+    image: osrm/osrm-backend:latest
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data/osm:/data
+    environment:
+      - OSRM_DATA_FOLDER=/data
+    command: >
+      sh -c "
+      if [ ! -f /data/map.osm.pbf ]; then
+        echo 'Downloading OSM map data...';
+        wget -q https://download.openstreetmap.fr/extracts/north-america/us/new_york-latest.osm.pbf -O /data/map.osm.pbf;
+      fi;
+      osrm-extract -p /opt/osrm/profiles/car.lua /data/map.osm.pbf;
+      osrm-partition /data/map.osrm;
+      osrm-customize /data/map.osrm;
+      osrm-routed --server --address 0.0.0.0 /data/map.osrm
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/route/v1/driving/13.388860,52.517037;15.4730046,52.5200066"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
