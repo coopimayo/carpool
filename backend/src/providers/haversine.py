@@ -1,7 +1,7 @@
 import math
 
-from carpool.models import Location
-from carpool.providers.base import DistanceProvider
+from models import Location
+from providers.base import DistanceProvider
 
 EARTH_RADIUS_KM = 6371.0
 DEFAULT_AVERAGE_SPEED_KMPH = 40.0

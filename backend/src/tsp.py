@@ -1,6 +1,6 @@
-from carpool.models import Location
-from carpool.providers.base import DistanceProvider
-from carpool.providers.haversine import HaversineProvider
+from models import Location
+from providers.base import DistanceProvider
+from providers.haversine import HaversineProvider
 
 
 def nearest_neighbor_tsp(

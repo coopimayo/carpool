@@ -4,8 +4,8 @@ from typing import Any
 
 import requests
 
-from carpool.models import Location
-from carpool.providers.base import DistanceProvider
+from models import Location
+from providers.base import DistanceProvider
 
 
 class OSRMProvider(DistanceProvider):

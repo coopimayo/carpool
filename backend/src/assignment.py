@@ -1,7 +1,7 @@
-from carpool.models import Driver, Location, Passenger, Route
-from carpool.providers.base import DistanceProvider
-from carpool.providers.haversine import HaversineProvider
-from carpool.tsp import nearest_neighbor_tsp
+from models import Driver, Location, Passenger, Route
+from providers.base import DistanceProvider
+from providers.haversine import HaversineProvider
+from tsp import nearest_neighbor_tsp
 
 
 def route_metrics(

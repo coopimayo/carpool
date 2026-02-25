@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from carpool.models import Location
+from models import Location
 
 
 class DistanceProvider(ABC):

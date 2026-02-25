@@ -1,7 +1,7 @@
-from carpool.assignment import assign_passengers_to_drivers
-from carpool.models import Driver, Location, Passenger
-from carpool.providers.haversine import HaversineProvider
-from carpool.providers.osrm import OSRMProvider
+from assignment import assign_passengers_to_drivers
+from models import Driver, Location, Passenger
+from providers.haversine import HaversineProvider
+from providers.osrm import OSRMProvider
 
 
 def melbourne_scenario() -> tuple[Location, list[Driver], list[Passenger]]:
