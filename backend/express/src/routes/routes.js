@@ -5,6 +5,10 @@ const { optimizationResults, getLatestResultId } = require('../store');
 const router = express.Router();
 
 router.get('/:driverId', (req, res) => {
+  if (!req.params.driverId || typeof req.params.driverId !== 'string') {
+    return res.status(400).json({ error: 'driverId path parameter is required' });
+  }
+
   const latestResultId = getLatestResultId();
 
   if (!latestResultId) {

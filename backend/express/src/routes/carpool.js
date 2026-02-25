@@ -9,6 +9,69 @@ const {
 
 const router = express.Router();
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function validateDrivers(drivers) {
+  const errors = [];
+  const normalized = drivers.map((driver, index) => {
+    if (!isPlainObject(driver)) {
+      errors.push(`drivers[${index}] must be an object`);
+      return null;
+    }
+
+    const userId = driver.userId;
+    const name = driver.name;
+    const capacity = Number(driver.capacity ?? 0);
+
+    if (!isNonEmptyString(userId)) {
+      errors.push(`drivers[${index}].userId must be a non-empty string`);
+    }
+
+    if (!isNonEmptyString(name)) {
+      errors.push(`drivers[${index}].name must be a non-empty string`);
+    }
+
+    if (!Number.isInteger(capacity) || capacity < 1) {
+      errors.push(`drivers[${index}].capacity must be an integer >= 1`);
+    }
+
+    return { userId, name, capacity };
+  });
+
+  return { errors, normalized };
+}
+
+function validatePassengers(passengers) {
+  const errors = [];
+  const normalized = passengers.map((passenger, index) => {
+    if (!isPlainObject(passenger)) {
+      errors.push(`passengers[${index}] must be an object`);
+      return null;
+    }
+
+    const userId = passenger.userId;
+    const seatsRequired = Number(passenger.seatsRequired ?? 1);
+
+    if (!isNonEmptyString(userId)) {
+      errors.push(`passengers[${index}].userId must be a non-empty string`);
+    }
+
+    if (!Number.isInteger(seatsRequired) || seatsRequired < 1) {
+      errors.push(`passengers[${index}].seatsRequired must be an integer >= 1`);
+    }
+
+    return { userId, seatsRequired };
+  });
+
+  return { errors, normalized };
+}
+
 function optimizeAssignments(drivers, passengers) {
   const remainingPassengers = [...passengers];
   const routes = [];
@@ -43,13 +106,29 @@ function optimizeAssignments(drivers, passengers) {
 }
 
 router.post('/optimize', (req, res) => {
-  const driversInput = req.body?.drivers;
-  const passengersInput = req.body?.passengers;
+  if (!isPlainObject(req.body)) {
+    return res.status(400).json({ error: 'Request body must be a JSON object' });
+  }
+
+  const driversInput = req.body.drivers;
+  const passengersInput = req.body.passengers;
 
   let drivers;
   let passengers;
 
-  if (Array.isArray(driversInput) || Array.isArray(passengersInput)) {
+  if (driversInput !== undefined || passengersInput !== undefined) {
+    if (driversInput !== undefined && !Array.isArray(driversInput)) {
+      return res.status(400).json({
+        error: 'drivers must be an array when provided',
+      });
+    }
+
+    if (passengersInput !== undefined && !Array.isArray(passengersInput)) {
+      return res.status(400).json({
+        error: 'passengers must be an array when provided',
+      });
+    }
+
     drivers = Array.isArray(driversInput) ? driversInput : [];
     passengers = Array.isArray(passengersInput) ? passengersInput : [];
   } else {
@@ -66,34 +145,14 @@ router.post('/optimize', (req, res) => {
     return res.status(400).json({ error: 'No passengers provided for optimization' });
   }
 
-  const normalizedDrivers = drivers.map((driver) => ({
-    userId: driver.userId,
-    name: driver.name,
-    capacity: Number(driver.capacity ?? 0),
-  }));
-  const normalizedPassengers = passengers.map((passenger) => ({
-    userId: passenger.userId,
-    seatsRequired: Number(passenger.seatsRequired ?? 1),
-  }));
+  const { errors: driverErrors, normalized: normalizedDrivers } = validateDrivers(drivers);
+  const { errors: passengerErrors, normalized: normalizedPassengers } = validatePassengers(passengers);
 
-  if (
-    normalizedDrivers.some((driver) => !driver.userId || !driver.name || !Number.isFinite(driver.capacity) || driver.capacity < 1)
-  ) {
+  const details = [...driverErrors, ...passengerErrors];
+  if (details.length > 0) {
     return res.status(400).json({
-      error: 'Each driver requires userId, name, and capacity >= 1',
-    });
-  }
-
-  if (
-    normalizedPassengers.some(
-      (passenger) =>
-        !passenger.userId ||
-        !Number.isFinite(passenger.seatsRequired) ||
-        passenger.seatsRequired < 1,
-    )
-  ) {
-    return res.status(400).json({
-      error: 'Each passenger requires userId and seatsRequired >= 1',
+      error: 'Invalid optimize payload',
+      details,
     });
   }
 

@@ -21,6 +21,22 @@ app.use('/users', usersRouter);
 app.use('/carpool', carpoolRouter);
 app.use('/routes', routesRouter);
 
+app.use((err, req, res, next) => {
+  if (err && err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Invalid JSON body' });
+  }
+
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ error: 'Invalid JSON body' });
+  }
+
+  if (err) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+
+  return next();
+});
+
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
