@@ -1,5 +1,13 @@
 const { Pool } = require('pg');
 
+function requireEnv(name) {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
 function createPool() {
   if (process.env.DATABASE_URL) {
     return new Pool({ connectionString: process.env.DATABASE_URL });
@@ -8,9 +16,9 @@ function createPool() {
   return new Pool({
     host: process.env.PGHOST || 'localhost',
     port: Number(process.env.PGPORT || 5432),
-    user: process.env.PGUSER || 'carpool',
-    password: process.env.PGPASSWORD || 'carpool',
-    database: process.env.PGDATABASE || 'carpool',
+    user: requireEnv('PGUSER'),
+    password: requireEnv('PGPASSWORD'),
+    database: requireEnv('PGDATABASE'),
   });
 }
 
