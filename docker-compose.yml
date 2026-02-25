@@ -26,3 +26,18 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: carpool
+      POSTGRES_PASSWORD: carpool
+      POSTGRES_DB: carpool
+    volumes:
+      - carpool-postgres:/var/lib/postgresql/data
+      - ./backend/express/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+volumes:
+  carpool-postgres:

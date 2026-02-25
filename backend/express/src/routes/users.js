@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { users } = require('../store');
+const { query } = require('../db');
 
 const router = express.Router();
 
@@ -25,7 +25,7 @@ function normalizeLocation(location) {
   return { latitude, longitude };
 }
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   if (!isPlainObject(req.body)) {
     return res.status(400).json({ error: 'Request body must be a JSON object' });
   }
@@ -77,13 +77,44 @@ router.post('/', (req, res) => {
     ...(role === 'passenger' ? { seatsRequired: normalizedSeatsRequired } : {}),
   };
 
-  const alreadyExists = users.has(userId);
-  users.set(userId, user);
+  try {
+    const existing = await query('SELECT 1 FROM users WHERE user_id = $1', [userId]);
 
-  return res.status(alreadyExists ? 200 : 201).json({
-    message: alreadyExists ? 'User updated' : 'User created',
-    user,
-  });
+    await query(
+      `
+        INSERT INTO users (user_id, name, role, location_lat, location_lng, capacity, seats_required)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (user_id)
+        DO UPDATE SET
+          name = EXCLUDED.name,
+          role = EXCLUDED.role,
+          location_lat = EXCLUDED.location_lat,
+          location_lng = EXCLUDED.location_lng,
+          capacity = EXCLUDED.capacity,
+          seats_required = EXCLUDED.seats_required,
+          updated_at = NOW()
+      `,
+      [
+        userId,
+        name,
+        role,
+        normalizedLocation.latitude,
+        normalizedLocation.longitude,
+        role === 'driver' ? normalizedCapacity : null,
+        role === 'passenger' ? normalizedSeatsRequired : null,
+      ],
+    );
+
+    const alreadyExists = existing.rowCount > 0;
+
+    return res.status(alreadyExists ? 200 : 201).json({
+      message: alreadyExists ? 'User updated' : 'User created',
+      user,
+    });
+  } catch (err) {
+    console.error('Failed to upsert user', err);
+    return res.status(500).json({ error: 'Failed to persist user' });
+  }
 });
 
 module.exports = router;

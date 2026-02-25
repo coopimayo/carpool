@@ -1,11 +1,7 @@
 const express = require('express');
 const { randomUUID } = require('crypto');
 
-const {
-  users,
-  optimizationResults,
-  setLatestResultId,
-} = require('../store');
+const { query } = require('../db');
 
 const router = express.Router();
 
@@ -105,7 +101,22 @@ function optimizeAssignments(drivers, passengers) {
   };
 }
 
-router.post('/optimize', (req, res) => {
+async function loadUsersByRole(role) {
+  const result = await query(
+    'SELECT user_id, name, role, capacity, seats_required FROM users WHERE role = $1',
+    [role],
+  );
+
+  return result.rows.map((row) => ({
+    userId: row.user_id,
+    name: row.name,
+    role: row.role,
+    capacity: row.capacity,
+    seatsRequired: row.seats_required,
+  }));
+}
+
+router.post('/optimize', async (req, res) => {
   if (!isPlainObject(req.body)) {
     return res.status(400).json({ error: 'Request body must be a JSON object' });
   }
@@ -132,9 +143,13 @@ router.post('/optimize', (req, res) => {
     drivers = Array.isArray(driversInput) ? driversInput : [];
     passengers = Array.isArray(passengersInput) ? passengersInput : [];
   } else {
-    const usersList = [...users.values()];
-    drivers = usersList.filter((user) => user.role === 'driver');
-    passengers = usersList.filter((user) => user.role === 'passenger');
+    try {
+      drivers = await loadUsersByRole('driver');
+      passengers = await loadUsersByRole('passenger');
+    } catch (err) {
+      console.error('Failed to load users for optimization', err);
+      return res.status(500).json({ error: 'Failed to load users for optimization' });
+    }
   }
 
   if (!drivers.length) {
@@ -166,18 +181,51 @@ router.post('/optimize', (req, res) => {
     ...assignment,
   };
 
-  optimizationResults.set(resultId, result);
-  setLatestResultId(resultId);
+  try {
+    await query(
+      `
+        INSERT INTO optimization_results (id, created_at, status, routes, unassigned_passenger_ids)
+        VALUES ($1, $2, $3, $4::jsonb, $5::jsonb)
+      `,
+      [
+        resultId,
+        result.createdAt,
+        result.status,
+        JSON.stringify(result.routes),
+        JSON.stringify(result.unassignedPassengerIds),
+      ],
+    );
 
-  return res.status(201).json(result);
+    return res.status(201).json(result);
+  } catch (err) {
+    console.error('Failed to persist optimization result', err);
+    return res.status(500).json({ error: 'Failed to persist optimization result' });
+  }
 });
 
-router.get('/results/:id', (req, res) => {
-  const result = optimizationResults.get(req.params.id);
-  if (!result) {
-    return res.status(404).json({ error: 'Optimization result not found' });
+router.get('/results/:id', async (req, res) => {
+  try {
+    const result = await query(
+      'SELECT id, created_at, status, routes, unassigned_passenger_ids FROM optimization_results WHERE id = $1',
+      [req.params.id],
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Optimization result not found' });
+    }
+
+    const row = result.rows[0];
+    return res.json({
+      id: row.id,
+      createdAt: row.created_at,
+      status: row.status,
+      routes: row.routes,
+      unassignedPassengerIds: row.unassigned_passenger_ids,
+    });
+  } catch (err) {
+    console.error('Failed to fetch optimization result', err);
+    return res.status(500).json({ error: 'Failed to fetch optimization result' });
   }
-  return res.json(result);
 });
 
 module.exports = router;
