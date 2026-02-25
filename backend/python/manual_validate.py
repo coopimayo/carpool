@@ -4,116 +4,74 @@ from carpool.providers.haversine import HaversineProvider
 from carpool.providers.osrm import OSRMProvider
 
 
-def validate_with_haversine() -> None:
-    destination = Location(40.73061, -73.935242)
+def melbourne_scenario() -> tuple[Location, list[Driver], list[Passenger]]:
+    destination = Location(-37.7987, 144.9557)
 
     drivers = [
-        Driver("d1", "Ana", Location(40.7128, -74.0060), capacity=4),
-        Driver("d2", "Ben", Location(40.7580, -73.9855), capacity=4),
-        Driver("d3", "Cara", Location(40.7300, -73.9900), capacity=4),
-        Driver("d4", "Dev", Location(40.7000, -73.9500), capacity=4),
-        Driver("d5", "Eli", Location(40.7400, -73.9700), capacity=4),
+        Driver("d1", "Driver A - Flinders Street Station", Location(-37.8183, 144.9671), capacity=4),
+        Driver("d2", "Driver B - Southern Cross Station", Location(-37.8184, 144.9526), capacity=4),
+        Driver("d3", "Driver C - Queen Victoria Market", Location(-37.8076, 144.9568), capacity=4),
+        Driver("d4", "Driver D - Richmond Station", Location(-37.8241, 144.9989), capacity=4),
+        Driver("d5", "Driver E - St Kilda Junction", Location(-37.8677, 144.9802), capacity=4),
     ]
 
     passengers = [
-        Passenger("p1", "P1", Location(40.7150, -74.0000)),
-        Passenger("p2", "P2", Location(40.7180, -73.9950)),
-        Passenger("p3", "P3", Location(40.7210, -73.9900)),
-        Passenger("p4", "P4", Location(40.7240, -73.9850)),
-        Passenger("p5", "P5", Location(40.7270, -73.9800)),
-        Passenger("p6", "P6", Location(40.7300, -73.9750)),
-        Passenger("p7", "P7", Location(40.7330, -73.9700)),
-        Passenger("p8", "P8", Location(40.7360, -73.9650)),
-        Passenger("p9", "P9", Location(40.7390, -73.9600)),
-        Passenger("p10", "P10", Location(40.7420, -73.9550)),
-        Passenger("p11", "P11", Location(40.7450, -73.9500)),
-        Passenger("p12", "P12", Location(40.7480, -73.9450)),
-        Passenger("p13", "P13", Location(40.7510, -73.9400)),
-        Passenger("p14", "P14", Location(40.7540, -73.9350)),
-        Passenger("p15", "P15", Location(40.7570, -73.9300)),
-        Passenger("p16", "P16", Location(40.7600, -73.9250)),
-        Passenger("p17", "P17", Location(40.7630, -73.9200)),
-        Passenger("p18", "P18", Location(40.7660, -73.9150)),
-        Passenger("p19", "P19", Location(40.7690, -73.9100)),
-        Passenger("p20", "P20", Location(40.7720, -73.9050)),
-        Passenger("p21", "P21", Location(40.7750, -73.9000)),
-        Passenger("p22", "P22", Location(40.7780, -73.8950)),
+        Passenger("p1", "120 Collins St, Melbourne VIC 3000", Location(-37.8157, 144.9691)),
+        Passenger("p2", "200 Bourke St, Melbourne VIC 3000", Location(-37.8127, 144.9654)),
+        Passenger("p3", "367 Collins St, Melbourne VIC 3000", Location(-37.8175, 144.9581)),
+        Passenger("p4", "330 Collins St, Melbourne VIC 3000", Location(-37.8170, 144.9602)),
+        Passenger("p5", "727 Collins St, Docklands VIC 3008", Location(-37.8203, 144.9497)),
+        Passenger("p6", "1 Exhibition St, Melbourne VIC 3000", Location(-37.8130, 144.9730)),
+        Passenger("p7", "500 Swanston St, Melbourne VIC 3000", Location(-37.8075, 144.9632)),
+        Passenger("p8", "234 La Trobe St, Melbourne VIC 3000", Location(-37.8109, 144.9639)),
+        Passenger("p9", "8 Nicholson St, East Melbourne VIC 3002", Location(-37.8108, 144.9717)),
+        Passenger("p10", "2 Wellington Parade, East Melbourne VIC 3002", Location(-37.8186, 144.9834)),
+        Passenger("p11", "252 Flinders St, Melbourne VIC 3000", Location(-37.8177, 144.9691)),
+        Passenger("p12", "18 Albert Rd, South Melbourne VIC 3205", Location(-37.8364, 144.9745)),
+        Passenger("p13", "10 Chapel St, South Yarra VIC 3141", Location(-37.8505, 144.9932)),
+        Passenger("p14", "12 Clarendon St, Southbank VIC 3006", Location(-37.8263, 144.9598)),
+        Passenger("p15", "89 A'Beckett St, Melbourne VIC 3000", Location(-37.8100, 144.9555)),
     ]
+
+    return destination, drivers, passengers
+
+
+def print_routes(label: str, drivers: list[Driver], passengers: list[Passenger], routes: list, unassigned: list[Passenger]) -> None:
+    print(f"\n=== {label} ===")
+    print(f"Drivers: {len(drivers)}")
+    print(f"Passengers: {len(passengers)}")
+    print(f"Assigned: {sum(len(route.passengers) for route in routes)}")
+    print(f"Unassigned: {len(unassigned)}\n")
+
+    for route in routes:
+        ordered_names = [passenger.name for passenger in route.pickup_order]
+        print(
+            f"Driver={route.driver.name} passengers={len(route.passengers)} "
+            f"order={ordered_names} distance_km={route.total_distance_km:.2f} "
+            f"travel_time_min={route.total_travel_time_minutes:.1f}"
+        )
+
+
+def validate_with_haversine() -> None:
+    destination, drivers, passengers = melbourne_scenario()
 
     provider = HaversineProvider()
     routes, unassigned = assign_passengers_to_drivers(
         drivers, passengers, destination, provider=provider
     )
 
-    print("\n=== HAVERSINE PROVIDER ===")
-    print(f"Drivers: {len(drivers)}")
-    print(f"Passengers: {len(passengers)}")
-    print(f"Assigned: {sum(len(route.passengers) for route in routes)}")
-    print(f"Unassigned: {len(unassigned)}\n")
-
-    for route in routes:
-        ordered_ids = [passenger.user_id for passenger in route.pickup_order]
-        print(
-            f"Driver={route.driver.user_id} passengers={len(route.passengers)} "
-            f"order={ordered_ids} distance_km={route.total_distance_km:.2f} "
-            f"travel_time_min={route.total_travel_time_minutes:.1f}"
-        )
+    print_routes("HAVERSINE PROVIDER (MELBOURNE)", drivers, passengers, routes, unassigned)
 
 
 def validate_with_osrm() -> None:
-    destination = Location(40.73061, -73.935242)
-
-    drivers = [
-        Driver("d1", "Ana", Location(40.7128, -74.0060), capacity=4),
-        Driver("d2", "Ben", Location(40.7580, -73.9855), capacity=4),
-        Driver("d3", "Cara", Location(40.7300, -73.9900), capacity=4),
-        Driver("d4", "Dev", Location(40.7000, -73.9500), capacity=4),
-        Driver("d5", "Eli", Location(40.7400, -73.9700), capacity=4),
-    ]
-
-    passengers = [
-        Passenger("p1", "P1", Location(40.7150, -74.0000)),
-        Passenger("p2", "P2", Location(40.7180, -73.9950)),
-        Passenger("p3", "P3", Location(40.7210, -73.9900)),
-        Passenger("p4", "P4", Location(40.7240, -73.9850)),
-        Passenger("p5", "P5", Location(40.7270, -73.9800)),
-        Passenger("p6", "P6", Location(40.7300, -73.9750)),
-        Passenger("p7", "P7", Location(40.7330, -73.9700)),
-        Passenger("p8", "P8", Location(40.7360, -73.9650)),
-        Passenger("p9", "P9", Location(40.7390, -73.9600)),
-        Passenger("p10", "P10", Location(40.7420, -73.9550)),
-        Passenger("p11", "P11", Location(40.7450, -73.9500)),
-        Passenger("p12", "P12", Location(40.7480, -73.9450)),
-        Passenger("p13", "P13", Location(40.7510, -73.9400)),
-        Passenger("p14", "P14", Location(40.7540, -73.9350)),
-        Passenger("p15", "P15", Location(40.7570, -73.9300)),
-        Passenger("p16", "P16", Location(40.7600, -73.9250)),
-        Passenger("p17", "P17", Location(40.7630, -73.9200)),
-        Passenger("p18", "P18", Location(40.7660, -73.9150)),
-        Passenger("p19", "P19", Location(40.7690, -73.9100)),
-        Passenger("p20", "P20", Location(40.7720, -73.9050)),
-        Passenger("p21", "P21", Location(40.7750, -73.9000)),
-        Passenger("p22", "P22", Location(40.7780, -73.8950)),
-    ]
+    destination, drivers, passengers = melbourne_scenario()
 
     provider = OSRMProvider()
     routes, unassigned = assign_passengers_to_drivers(
         drivers, passengers, destination, provider=provider
     )
 
-    print("\n=== OSRM PROVIDER ===")
-    print(f"Drivers: {len(drivers)}")
-    print(f"Passengers: {len(passengers)}")
-    print(f"Assigned: {sum(len(route.passengers) for route in routes)}")
-    print(f"Unassigned: {len(unassigned)}\n")
-
-    for route in routes:
-        ordered_ids = [passenger.user_id for passenger in route.pickup_order]
-        print(
-            f"Driver={route.driver.user_id} passengers={len(route.passengers)} "
-            f"order={ordered_ids} distance_km={route.total_distance_km:.2f} "
-            f"travel_time_min={route.total_travel_time_minutes:.1f}"
-        )
+    print_routes("OSRM PROVIDER (MELBOURNE)", drivers, passengers, routes, unassigned)
 
 
 if __name__ == "__main__":
