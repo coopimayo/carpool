@@ -49,7 +49,9 @@ def assign_passengers_to_drivers(
 
             nearest = min(
                 fitting_passengers,
-                key=lambda passenger: provider.distance_km(anchor, passenger.location),
+                key=lambda passenger: provider.travel_time_minutes(
+                    anchor, passenger.location
+                ),
             )
             assigned.append(nearest)
             remaining_passengers.remove(nearest)

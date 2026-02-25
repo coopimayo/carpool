@@ -20,7 +20,7 @@ def nearest_neighbor_tsp(
 
     while unvisited:
         next_stop = min(
-            unvisited, key=lambda stop: provider.distance_km(current, stop)
+            unvisited, key=lambda stop: provider.travel_time_minutes(current, stop)
         )
         ordered.append(next_stop)
         unvisited.remove(next_stop)
