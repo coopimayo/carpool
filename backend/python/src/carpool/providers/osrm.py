@@ -1,4 +1,6 @@
 import os
+import time
+from typing import Any
 
 import requests
 
@@ -9,14 +11,91 @@ from carpool.providers.base import DistanceProvider
 class OSRMProvider(DistanceProvider):
     """OSRM (Open Source Routing Machine) provider for real-world distances."""
 
-    def __init__(self, base_url: str | None = None, timeout: float = 10.0):
+    def __init__(
+        self,
+        base_url: str | None = None,
+        timeout: float = 10.0,
+        requests_per_second: float = 10.0,
+        max_retries: int = 2,
+        retry_backoff_seconds: float = 0.2,
+    ):
         self.base_url = base_url or os.getenv("OSRM_URL", "http://localhost:5000")
-        self.timeout = timeout
+        self.timeout = max(timeout, 0.0)
+        self.requests_per_second = max(requests_per_second, 0.0)
+        self.max_retries = max(max_retries, 0)
+        self.retry_backoff_seconds = max(retry_backoff_seconds, 0.0)
+        self._min_request_interval_seconds = (
+            0.0 if self.requests_per_second == 0 else 1.0 / self.requests_per_second
+        )
+        self._last_request_timestamp = 0.0
         self._distance_cache: dict[tuple[Location, Location], float] = {}
         self._travel_time_cache: dict[tuple[Location, Location], float] = {}
 
     def _cache_key(self, origin: Location, destination: Location) -> tuple[Location, Location]:
         return (origin, destination)
+
+    def _throttle_requests(self) -> None:
+        if self._min_request_interval_seconds <= 0.0:
+            return
+
+        now = time.monotonic()
+        elapsed = now - self._last_request_timestamp
+        remaining = self._min_request_interval_seconds - elapsed
+        if remaining > 0:
+            time.sleep(remaining)
+
+    def _safe_positive_float(self, value: Any) -> float:
+        if value is None:
+            return 0.0
+
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
+        return parsed if parsed > 0.0 else 0.0
+
+    def _request_json(self, url: str) -> dict[str, Any] | None:
+        for attempt in range(self.max_retries + 1):
+            self._throttle_requests()
+            self._last_request_timestamp = time.monotonic()
+
+            try:
+                response = requests.get(url, timeout=self.timeout)
+                status_code_raw = getattr(response, "status_code", 200)
+                status_code = (
+                    status_code_raw
+                    if isinstance(status_code_raw, int)
+                    else 200
+                )
+
+                if status_code == 429 or status_code >= 500:
+                    if attempt < self.max_retries:
+                        backoff = self.retry_backoff_seconds * (2**attempt)
+                        if backoff > 0.0:
+                            time.sleep(backoff)
+                        continue
+
+                    return None
+
+                response.raise_for_status()
+                payload = response.json()
+                if isinstance(payload, dict):
+                    return payload
+                return None
+            except (requests.Timeout, requests.ConnectionError):
+                if attempt < self.max_retries:
+                    backoff = self.retry_backoff_seconds * (2**attempt)
+                    if backoff > 0.0:
+                        time.sleep(backoff)
+                    continue
+                return None
+            except requests.RequestException:
+                return None
+            except ValueError:
+                return None
+
+        return None
 
     def distance_km(self, origin: Location, destination: Location) -> float:
         """Get distance between two locations via OSRM."""
@@ -46,18 +125,27 @@ class OSRMProvider(DistanceProvider):
             f"{origin.longitude},{origin.latitude};"
             f"{destination.longitude},{destination.latitude}"
         )
-        try:
-            response = requests.get(url, timeout=self.timeout)
-            response.raise_for_status()
-            data = response.json()
-            if data["code"] == "Ok" and data["routes"]:
-                route_data = data["routes"][0]
-                distance_km = route_data.get("distance", 0.0) / 1000.0
-                travel_time_minutes = route_data.get("duration", 0.0) / 60.0
-                self._distance_cache[cache_key] = distance_km
-                self._travel_time_cache[cache_key] = travel_time_minutes
-        except Exception:
-            pass
+        data = self._request_json(url)
+        if not data:
+            return
+
+        if data.get("code") != "Ok":
+            return
+
+        routes = data.get("routes")
+        if not isinstance(routes, list) or not routes:
+            return
+
+        first_route = routes[0]
+        if not isinstance(first_route, dict):
+            return
+
+        distance_km = self._safe_positive_float(first_route.get("distance")) / 1000.0
+        travel_time_minutes = (
+            self._safe_positive_float(first_route.get("duration")) / 60.0
+        )
+        self._distance_cache[cache_key] = distance_km
+        self._travel_time_cache[cache_key] = travel_time_minutes
 
     def matrix_distances_km(
         self, origins: list[Location], destinations: list[Location]
@@ -143,25 +231,49 @@ class OSRMProvider(DistanceProvider):
             "annotations=distance,duration"
         )
 
-        try:
-            response = requests.get(url, timeout=self.timeout)
-            response.raise_for_status()
-            data = response.json()
-            if data["code"] == "Ok":
-                distance_matrix = data.get("distances") or []
-                duration_matrix = data.get("durations") or []
-                for row_index, source in enumerate(source_locs):
-                    for column_index, destination in enumerate(destination_locs):
-                        cache_key = self._cache_key(source, destination)
+        data = self._request_json(url)
+        if not data:
+            return
 
-                        distance_meters = distance_matrix[row_index][column_index]
-                        distance_km = 0.0 if distance_meters is None else distance_meters / 1000.0
-                        self._distance_cache[cache_key] = distance_km
+        if data.get("code") != "Ok":
+            return
 
-                        duration_seconds = duration_matrix[row_index][column_index]
-                        travel_time_minutes = (
-                            0.0 if duration_seconds is None else duration_seconds / 60.0
-                        )
-                        self._travel_time_cache[cache_key] = travel_time_minutes
-        except Exception:
-            pass
+        distance_matrix = data.get("distances")
+        duration_matrix = data.get("durations")
+
+        for row_index, source in enumerate(source_locs):
+            distance_row = (
+                distance_matrix[row_index]
+                if isinstance(distance_matrix, list)
+                and row_index < len(distance_matrix)
+                and isinstance(distance_matrix[row_index], list)
+                else []
+            )
+            duration_row = (
+                duration_matrix[row_index]
+                if isinstance(duration_matrix, list)
+                and row_index < len(duration_matrix)
+                and isinstance(duration_matrix[row_index], list)
+                else []
+            )
+
+            for column_index, destination in enumerate(destination_locs):
+                cache_key = self._cache_key(source, destination)
+
+                distance_meters = (
+                    distance_row[column_index]
+                    if column_index < len(distance_row)
+                    else None
+                )
+                duration_seconds = (
+                    duration_row[column_index]
+                    if column_index < len(duration_row)
+                    else None
+                )
+
+                self._distance_cache[cache_key] = (
+                    self._safe_positive_float(distance_meters) / 1000.0
+                )
+                self._travel_time_cache[cache_key] = (
+                    self._safe_positive_float(duration_seconds) / 60.0
+                )

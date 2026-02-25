@@ -225,6 +225,112 @@ class TestOSRMProvider:
 
         assert distance == 0.0
 
+    @patch("carpool.providers.osrm.time.sleep")
+    @patch("carpool.providers.osrm.time.monotonic")
+    @patch("carpool.providers.osrm.requests.get")
+    def test_distance_rate_limiter_waits_between_requests(
+        self,
+        mock_get: MagicMock,
+        mock_monotonic: MagicMock,
+        mock_sleep: MagicMock,
+    ) -> None:
+        response_one = MagicMock()
+        response_one.status_code = 200
+        response_one.raise_for_status.return_value = None
+        response_one.json.return_value = {
+            "code": "Ok",
+            "routes": [{"distance": 1000, "duration": 60}],
+        }
+
+        response_two = MagicMock()
+        response_two.status_code = 200
+        response_two.raise_for_status.return_value = None
+        response_two.json.return_value = {
+            "code": "Ok",
+            "routes": [{"distance": 2000, "duration": 120}],
+        }
+
+        mock_get.side_effect = [response_one, response_two]
+        mock_monotonic.side_effect = [10.0, 10.0, 10.1, 10.1]
+
+        provider = OSRMProvider(requests_per_second=2.0, max_retries=0)
+        provider.distance_km(Location(0.0, 0.0), Location(1.0, 1.0))
+        provider.distance_km(Location(0.0, 0.0), Location(2.0, 2.0))
+
+        mock_sleep.assert_called_once()
+        assert mock_sleep.call_args[0][0] == pytest.approx(0.4, abs=1e-6)
+
+    @patch("carpool.providers.osrm.time.sleep")
+    @patch("carpool.providers.osrm.requests.get")
+    def test_distance_retries_on_429(self, mock_get: MagicMock, mock_sleep: MagicMock) -> None:
+        rate_limited_response = MagicMock()
+        rate_limited_response.status_code = 429
+
+        success_response = MagicMock()
+        success_response.status_code = 200
+        success_response.raise_for_status.return_value = None
+        success_response.json.return_value = {
+            "code": "Ok",
+            "routes": [{"distance": 5000, "duration": 300}],
+        }
+
+        mock_get.side_effect = [rate_limited_response, success_response]
+
+        provider = OSRMProvider(
+            requests_per_second=0.0,
+            max_retries=1,
+            retry_backoff_seconds=0.1,
+        )
+        distance = provider.distance_km(Location(0.0, 0.0), Location(1.0, 1.0))
+
+        assert distance == 5.0
+        assert mock_get.call_count == 2
+        mock_sleep.assert_called_once_with(0.1)
+
+    @patch("carpool.providers.osrm.requests.get")
+    def test_distance_with_non_numeric_fields_returns_zero(
+        self, mock_get: MagicMock
+    ) -> None:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "code": "Ok",
+            "routes": [{"distance": "invalid", "duration": "bad"}],
+        }
+        mock_get.return_value = mock_response
+
+        provider = OSRMProvider()
+        distance = provider.distance_km(Location(0.0, 0.0), Location(1.0, 1.0))
+        travel_time = provider.travel_time_minutes(
+            Location(0.0, 0.0), Location(1.0, 1.0)
+        )
+
+        assert distance == 0.0
+        assert travel_time == 0.0
+
+    @patch("carpool.providers.osrm.requests.get")
+    def test_matrix_malformed_shape_falls_back_to_zero(self, mock_get: MagicMock) -> None:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "code": "Ok",
+            "distances": [[1000]],
+            "durations": [[60]],
+        }
+        mock_get.return_value = mock_response
+
+        provider = OSRMProvider()
+        origins = [Location(0.0, 0.0)]
+        destinations = [Location(1.0, 1.0), Location(2.0, 2.0)]
+
+        distances = provider.matrix_distances_km(origins, destinations)
+        durations = provider.matrix_travel_times_minutes(origins, destinations)
+
+        assert distances == [[1.0, 0.0]]
+        assert durations == [[1.0, 0.0]]
+
     @patch("carpool.providers.osrm.requests.get")
     def test_matrix_distances_connection_error(self, mock_get: MagicMock) -> None:
         mock_get.side_effect = requests.ConnectionError("Connection refused")
