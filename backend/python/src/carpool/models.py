@@ -30,4 +30,5 @@ class Route:
     passengers: list[Passenger] = field(default_factory=list)
     pickup_order: list[Passenger] = field(default_factory=list)
     total_distance_km: float = 0.0
+    total_travel_time_minutes: float = 0.0
     unfilled_seats: int = 0

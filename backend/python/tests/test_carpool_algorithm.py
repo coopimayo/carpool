@@ -29,6 +29,13 @@ class TestHaversineProvider:
 
         assert distance == 0.0
 
+    def test_travel_time_same_location_is_zero(self) -> None:
+        loc = Location(latitude=40.0, longitude=-74.0)
+        provider = HaversineProvider()
+        travel_time = provider.travel_time_minutes(loc, loc)
+
+        assert travel_time == 0.0
+
     def test_distance_antipodal_points(self) -> None:
         north_pole = Location(latitude=90.0, longitude=0.0)
         south_pole = Location(latitude=-90.0, longitude=0.0)
@@ -68,6 +75,19 @@ class TestHaversineProvider:
 
         assert matrix == []
 
+    def test_matrix_travel_times_2x2(self) -> None:
+        origins = [Location(0.0, 0.0), Location(1.0, 1.0)]
+        destinations = [Location(0.0, 1.0), Location(1.0, 0.0)]
+
+        provider = HaversineProvider()
+        matrix = provider.matrix_travel_times_minutes(origins, destinations)
+
+        assert len(matrix) == 2
+        assert len(matrix[0]) == 2
+        assert len(matrix[1]) == 2
+        assert all(isinstance(t, float) for row in matrix for t in row)
+        assert all(t >= 0.0 for row in matrix for t in row)
+
 
 class TestOSRMProvider:
     """Test OSRM distance provider with mocked responses."""
@@ -78,7 +98,7 @@ class TestOSRMProvider:
         mock_response.raise_for_status.return_value = None
         mock_response.json.return_value = {
             "code": "Ok",
-            "routes": [{"distance": 340000}],  # 340 km
+            "routes": [{"distance": 340000, "duration": 18000}],
         }
         mock_get.return_value = mock_response
 
@@ -91,12 +111,30 @@ class TestOSRMProvider:
         assert mock_get.called
 
     @patch("carpool.providers.osrm.requests.get")
+    def test_travel_time_valid_response(self, mock_get: MagicMock) -> None:
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "code": "Ok",
+            "routes": [{"distance": 340000, "duration": 7200}],
+        }
+        mock_get.return_value = mock_response
+
+        provider = OSRMProvider()
+        travel_time = provider.travel_time_minutes(
+            Location(51.5074, -0.1278), Location(48.8566, 2.3522)
+        )
+
+        assert 119 <= travel_time <= 121
+        assert mock_get.called
+
+    @patch("carpool.providers.osrm.requests.get")
     def test_distance_uses_cache_for_repeated_pair(self, mock_get: MagicMock) -> None:
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
         mock_response.json.return_value = {
             "code": "Ok",
-            "routes": [{"distance": 120000}],
+            "routes": [{"distance": 120000, "duration": 7200}],
         }
         mock_get.return_value = mock_response
 
@@ -108,6 +146,28 @@ class TestOSRMProvider:
         second = provider.distance_km(origin, destination)
 
         assert first == second == 120.0
+        assert mock_get.call_count == 1
+
+    @patch("carpool.providers.osrm.requests.get")
+    def test_travel_time_uses_cache_after_distance_call(
+        self, mock_get: MagicMock
+    ) -> None:
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "code": "Ok",
+            "routes": [{"distance": 120000, "duration": 5400}],
+        }
+        mock_get.return_value = mock_response
+
+        provider = OSRMProvider()
+        origin = Location(0.0, 0.0)
+        destination = Location(1.0, 1.0)
+
+        provider.distance_km(origin, destination)
+        travel_time = provider.travel_time_minutes(origin, destination)
+
+        assert travel_time == 90.0
         assert mock_get.call_count == 1
 
     @patch("carpool.providers.osrm.requests.get")
@@ -185,6 +245,7 @@ class TestOSRMProvider:
         mock_response.json.return_value = {
             "code": "Ok",
             "distances": [[111000, 222000], [333000, 444000]],
+            "durations": [[1110, 2220], [3330, 4440]],
         }
         mock_get.return_value = mock_response
 
@@ -197,6 +258,30 @@ class TestOSRMProvider:
 
         assert first == second
         assert first == [[111.0, 222.0], [333.0, 444.0]]
+        assert mock_get.call_count == 1
+
+    @patch("carpool.providers.osrm.requests.get")
+    def test_matrix_travel_times_uses_cache_for_repeated_call(
+        self, mock_get: MagicMock
+    ) -> None:
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "code": "Ok",
+            "distances": [[111000, 222000], [333000, 444000]],
+            "durations": [[600, 1200], [1800, 2400]],
+        }
+        mock_get.return_value = mock_response
+
+        provider = OSRMProvider()
+        origins = [Location(0.0, 0.0), Location(1.0, 1.0)]
+        destinations = [Location(2.0, 2.0), Location(3.0, 3.0)]
+
+        first = provider.matrix_travel_times_minutes(origins, destinations)
+        second = provider.matrix_travel_times_minutes(origins, destinations)
+
+        assert first == second
+        assert first == [[10.0, 20.0], [30.0, 40.0]]
         assert mock_get.call_count == 1
 
     @patch("carpool.providers.osrm.requests.get")
@@ -215,6 +300,7 @@ class TestOSRMProvider:
         matrix_response.json.return_value = {
             "code": "Ok",
             "distances": [[250000]],
+            "durations": [[1200]],
         }
 
         mock_get.side_effect = [route_response, matrix_response]
@@ -246,6 +332,26 @@ class TestOSRMProvider:
         origins = [Location(0.0, 0.0)]
         destinations: list[Location] = []
         matrix = provider.matrix_distances_km(origins, destinations)
+
+        assert matrix == [[]]
+        assert not mock_get.called
+
+    @patch("carpool.providers.osrm.requests.get")
+    def test_matrix_travel_times_empty_origins(self, mock_get: MagicMock) -> None:
+        provider = OSRMProvider()
+        origins: list[Location] = []
+        destinations = [Location(1.0, 1.0)]
+        matrix = provider.matrix_travel_times_minutes(origins, destinations)
+
+        assert matrix == []
+        assert not mock_get.called
+
+    @patch("carpool.providers.osrm.requests.get")
+    def test_matrix_travel_times_empty_destinations(self, mock_get: MagicMock) -> None:
+        provider = OSRMProvider()
+        origins = [Location(0.0, 0.0)]
+        destinations: list[Location] = []
+        matrix = provider.matrix_travel_times_minutes(origins, destinations)
 
         assert matrix == [[]]
         assert not mock_get.called
@@ -395,6 +501,7 @@ class TestAssignmentWithProviders:
 
         assert len(routes) == 1
         assert routes[0].total_distance_km > 0
+        assert routes[0].total_travel_time_minutes > 0
 
     def test_greedy_assignment_unfilled_seats_tracked(self) -> None:
         drivers = [

@@ -55,7 +55,8 @@ def validate_with_haversine() -> None:
         ordered_ids = [passenger.user_id for passenger in route.pickup_order]
         print(
             f"Driver={route.driver.user_id} passengers={len(route.passengers)} "
-            f"order={ordered_ids} distance_km={route.total_distance_km:.2f}"
+            f"order={ordered_ids} distance_km={route.total_distance_km:.2f} "
+            f"travel_time_min={route.total_travel_time_minutes:.1f}"
         )
 
 
@@ -110,7 +111,8 @@ def validate_with_osrm() -> None:
         ordered_ids = [passenger.user_id for passenger in route.pickup_order]
         print(
             f"Driver={route.driver.user_id} passengers={len(route.passengers)} "
-            f"order={ordered_ids} distance_km={route.total_distance_km:.2f}"
+            f"order={ordered_ids} distance_km={route.total_distance_km:.2f} "
+            f"travel_time_min={route.total_travel_time_minutes:.1f}"
         )
 
 

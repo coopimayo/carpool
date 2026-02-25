@@ -1,8 +1,24 @@
-from carpool.distance import route_distance_km
 from carpool.models import Driver, Location, Passenger, Route
 from carpool.providers.base import DistanceProvider
 from carpool.providers.haversine import HaversineProvider
 from carpool.tsp import nearest_neighbor_tsp
+
+
+def route_metrics(
+    stops: list[Location], provider: DistanceProvider
+) -> tuple[float, float]:
+    if len(stops) < 2:
+        return 0.0, 0.0
+
+    total_distance_km = 0.0
+    total_travel_time_minutes = 0.0
+    for index in range(len(stops) - 1):
+        origin = stops[index]
+        destination = stops[index + 1]
+        total_distance_km += provider.distance_km(origin, destination)
+        total_travel_time_minutes += provider.travel_time_minutes(origin, destination)
+
+    return total_distance_km, total_travel_time_minutes
 
 
 def assign_passengers_to_drivers(
@@ -59,12 +75,17 @@ def assign_passengers_to_drivers(
         if destination:
             route_stops.append(destination)
 
+        total_distance_km, total_travel_time_minutes = route_metrics(
+            route_stops, provider
+        )
+
         routes.append(
             Route(
                 driver=driver,
                 passengers=assigned,
                 pickup_order=pickup_order,
-                total_distance_km=route_distance_km(route_stops),
+                total_distance_km=total_distance_km,
+                total_travel_time_minutes=total_travel_time_minutes,
                 unfilled_seats=driver.capacity - seats_taken,
             )
         )
