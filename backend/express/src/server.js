@@ -3,6 +3,7 @@ const express = require('express');
 const usersRouter = require('./routes/users');
 const carpoolRouter = require('./routes/carpool');
 const routesRouter = require('./routes/routes');
+const { startOptimizationWorker } = require('./queue');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -44,3 +45,5 @@ app.use((req, res) => {
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
+
+startOptimizationWorker();

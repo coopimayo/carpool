@@ -18,5 +18,19 @@ CREATE TABLE IF NOT EXISTS optimization_results (
   unassigned_passenger_ids JSONB NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS optimization_jobs (
+  id UUID PRIMARY KEY,
+  status TEXT NOT NULL CHECK (status IN ('queued', 'in_progress', 'completed', 'failed')),
+  payload JSONB NOT NULL,
+  result_id UUID,
+  error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ
+);
+
 CREATE INDEX IF NOT EXISTS optimization_results_created_at_idx
   ON optimization_results (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS optimization_jobs_status_created_at_idx
+  ON optimization_jobs (status, created_at ASC);
