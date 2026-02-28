@@ -1,6 +1,12 @@
 import './LandingPage.css'
 
-function LandingPage() {
+function LandingPage({
+  account,
+  history,
+  historyLoading,
+  actionLoading,
+  onCreateRoute,
+}) {
   return (
     <div className="landing-page shell">
       <section className="hero">
@@ -17,9 +23,37 @@ function LandingPage() {
           <span>ETA-friendly assignments</span>
         </div>
 
-        <div className="hero-actions">
-          <button className="primary-btn">Calculate route</button>
-        </div>
+        {account && (
+          <div className="hero-actions">
+            <button className="primary-btn" onClick={onCreateRoute} disabled={actionLoading}>
+              {actionLoading ? 'Calculating...' : 'Calculate route'}
+            </button>
+          </div>
+        )}
+
+        {account && (
+          <section className="history-section">
+            <h2>Saved routes</h2>
+            {historyLoading ? (
+              <p className="history-empty">Loading route history…</p>
+            ) : history.length === 0 ? (
+              <p className="history-empty">No saved routes yet. Calculate your first route.</p>
+            ) : (
+              <ul className="history-list">
+                {history.map((item) => (
+                  <li key={item.id} className="history-item">
+                    <p className="history-date">
+                      {new Date(item.createdAt).toLocaleString()}
+                    </p>
+                    <p>
+                      Routes: {item.routes.length} · Unassigned passengers: {item.unassignedPassengerIds.length}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
       </section>
     </div>
   )

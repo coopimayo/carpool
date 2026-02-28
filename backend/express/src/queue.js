@@ -11,10 +11,10 @@ async function enqueueOptimizationJob(payload) {
 
   await query(
     `
-      INSERT INTO optimization_jobs (id, status, payload)
-      VALUES ($1, 'queued', $2::jsonb)
+      INSERT INTO optimization_jobs (id, account_id, status, payload)
+      VALUES ($1, $2, 'queued', $3::jsonb)
     `,
-    [jobId, JSON.stringify(payload)],
+    [jobId, payload.accountId, JSON.stringify(payload)],
   );
 
   return jobId;
@@ -28,7 +28,7 @@ async function claimNextJob() {
     const claim = await client.query(
       `
         WITH next_job AS (
-          SELECT id, payload
+          SELECT id, account_id, payload
           FROM optimization_jobs
           WHERE status = 'queued'
           ORDER BY created_at ASC
@@ -39,7 +39,7 @@ async function claimNextJob() {
         SET status = 'in_progress', started_at = NOW()
         FROM next_job
         WHERE optimization_jobs.id = next_job.id
-        RETURNING optimization_jobs.id, next_job.payload
+        RETURNING optimization_jobs.id, next_job.account_id, next_job.payload
       `,
     );
 
@@ -51,6 +51,7 @@ async function claimNextJob() {
 
     return {
       id: claim.rows[0].id,
+      accountId: claim.rows[0].account_id,
       payload: claim.rows[0].payload,
     };
   } catch (err) {
@@ -102,7 +103,7 @@ async function processNextJob() {
 
     const assignment = optimizeAssignments(drivers, passengers);
     const resultId = randomUUID();
-    const result = buildOptimizationResult(resultId, assignment);
+    const result = buildOptimizationResult(resultId, assignment, job.accountId || null);
 
     await persistOptimizationResult(result);
     await markJobCompleted(job.id, resultId);
@@ -133,7 +134,7 @@ function startOptimizationWorker(options = {}) {
 async function getOptimizationJob(jobId) {
   const result = await query(
     `
-      SELECT id, status, result_id, error, created_at, started_at, finished_at
+      SELECT id, account_id, status, result_id, error, created_at, started_at, finished_at
       FROM optimization_jobs
       WHERE id = $1
     `,
@@ -147,6 +148,34 @@ async function getOptimizationJob(jobId) {
   const row = result.rows[0];
   return {
     id: row.id,
+    accountId: row.account_id,
+    status: row.status,
+    resultId: row.result_id,
+    error: row.error,
+    createdAt: row.created_at,
+    startedAt: row.started_at,
+    finishedAt: row.finished_at,
+  };
+}
+
+async function getOptimizationJobForAccount(jobId, accountId) {
+  const result = await query(
+    `
+      SELECT id, account_id, status, result_id, error, created_at, started_at, finished_at
+      FROM optimization_jobs
+      WHERE id = $1 AND account_id = $2
+    `,
+    [jobId, accountId],
+  );
+
+  if (result.rowCount === 0) {
+    return null;
+  }
+
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    accountId: row.account_id,
     status: row.status,
     resultId: row.result_id,
     error: row.error,
@@ -160,4 +189,5 @@ module.exports = {
   enqueueOptimizationJob,
   startOptimizationWorker,
   getOptimizationJob,
+  getOptimizationJobForAccount,
 };

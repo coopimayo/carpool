@@ -1,14 +1,17 @@
 const express = require('express');
+const cors = require('cors');
 
 const usersRouter = require('./routes/users');
 const carpoolRouter = require('./routes/carpool');
 const routesRouter = require('./routes/routes');
+const authRouter = require('./routes/auth');
 const { startOptimizationWorker } = require('./queue');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use(cors());
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -21,6 +24,7 @@ app.get('/', (_req, res) => {
 app.use('/users', usersRouter);
 app.use('/carpool', carpoolRouter);
 app.use('/routes', routesRouter);
+app.use('/auth', authRouter);
 
 app.use((err, req, res, next) => {
   if (err && err.type === 'entity.parse.failed') {

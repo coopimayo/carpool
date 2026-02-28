@@ -33,9 +33,10 @@ function optimizeAssignments(drivers, passengers) {
   };
 }
 
-function buildOptimizationResult(resultId, assignment) {
+function buildOptimizationResult(resultId, assignment, accountId = null) {
   return {
     id: resultId,
+    accountId,
     createdAt: new Date().toISOString(),
     status: 'completed',
     ...assignment,
@@ -45,11 +46,12 @@ function buildOptimizationResult(resultId, assignment) {
 async function persistOptimizationResult(result) {
   await query(
     `
-      INSERT INTO optimization_results (id, created_at, status, routes, unassigned_passenger_ids)
-      VALUES ($1, $2, $3, $4::jsonb, $5::jsonb)
+      INSERT INTO optimization_results (id, account_id, created_at, status, routes, unassigned_passenger_ids)
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
     `,
     [
       result.id,
+      result.accountId,
       result.createdAt,
       result.status,
       JSON.stringify(result.routes),

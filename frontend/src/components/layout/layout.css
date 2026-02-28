@@ -44,6 +44,34 @@
   color: #e2e8f0;
 }
 
+.site-auth-entry {
+  border: 1px solid #1d4ed8;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+  border-radius: 8px;
+  padding: 0.48rem 0.7rem;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.site-user {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: #cbd5e1;
+  font-size: 0.86rem;
+}
+
+.site-logout {
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
 .app-main {
   flex: 1;
 }
@@ -65,4 +93,11 @@
 
 .site-footer-inner p {
   margin: 0;
+}
+
+@media (max-width: 920px) {
+  .site-header-inner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }

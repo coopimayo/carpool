@@ -1,0 +1,55 @@
+.auth-page {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+
+.auth-card {
+  max-width: 460px;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  background: radial-gradient(circle at top right, #172554 0%, #0f172a 45%, #020617 100%);
+  padding: 1.2rem;
+}
+
+.auth-card h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  color: #f8fafc;
+}
+
+.auth-card > p {
+  margin: 0.45rem 0 0.9rem;
+  color: #94a3b8;
+}
+
+.auth-form {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.auth-form label {
+  font-size: 0.82rem;
+  color: #94a3b8;
+}
+
+.auth-form input {
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 0.55rem 0.6rem;
+}
+
+.text-btn {
+  background: transparent;
+  border: none;
+  color: #93c5fd;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+
+.auth-error {
+  margin-top: 0.8rem;
+  color: #fda4af;
+}

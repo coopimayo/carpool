@@ -7,7 +7,8 @@ const {
   buildOptimizationResult,
   persistOptimizationResult,
 } = require('../optimization');
-const { enqueueOptimizationJob, getOptimizationJob } = require('../queue');
+const { enqueueOptimizationJob, getOptimizationJobForAccount } = require('../queue');
+const { requireAuth } = require('../auth');
 
 const router = express.Router();
 
@@ -157,7 +158,7 @@ async function resolveOptimizationInputs(req, res) {
   };
 }
 
-router.post('/optimize', async (req, res) => {
+router.post('/optimize', requireAuth, async (req, res) => {
   const inputs = await resolveOptimizationInputs(req, res);
   if (!inputs) {
     return null;
@@ -165,7 +166,7 @@ router.post('/optimize', async (req, res) => {
 
   const resultId = randomUUID();
   const assignment = optimizeAssignments(inputs.drivers, inputs.passengers);
-  const result = buildOptimizationResult(resultId, assignment);
+  const result = buildOptimizationResult(resultId, assignment, req.auth.accountId);
 
   try {
     await persistOptimizationResult(result);
@@ -176,14 +177,17 @@ router.post('/optimize', async (req, res) => {
   }
 });
 
-router.post('/optimize/async', async (req, res) => {
+router.post('/optimize/async', requireAuth, async (req, res) => {
   const inputs = await resolveOptimizationInputs(req, res);
   if (!inputs) {
     return null;
   }
 
   try {
-    const jobId = await enqueueOptimizationJob(inputs);
+    const jobId = await enqueueOptimizationJob({
+      ...inputs,
+      accountId: req.auth.accountId,
+    });
     return res.status(202).json({
       jobId,
       status: 'queued',
@@ -194,11 +198,15 @@ router.post('/optimize/async', async (req, res) => {
   }
 });
 
-router.get('/results/:id', async (req, res) => {
+router.get('/results/:id', requireAuth, async (req, res) => {
   try {
     const result = await query(
-      'SELECT id, created_at, status, routes, unassigned_passenger_ids FROM optimization_results WHERE id = $1',
-      [req.params.id],
+      `
+        SELECT id, account_id, created_at, status, routes, unassigned_passenger_ids
+        FROM optimization_results
+        WHERE id = $1 AND account_id = $2
+      `,
+      [req.params.id, req.auth.accountId],
     );
 
     if (result.rowCount === 0) {
@@ -219,9 +227,9 @@ router.get('/results/:id', async (req, res) => {
   }
 });
 
-router.get('/jobs/:id', async (req, res) => {
+router.get('/jobs/:id', requireAuth, async (req, res) => {
   try {
-    const job = await getOptimizationJob(req.params.id);
+    const job = await getOptimizationJobForAccount(req.params.id, req.auth.accountId);
     if (!job) {
       return res.status(404).json({ error: 'Optimization job not found' });
     }
@@ -229,8 +237,12 @@ router.get('/jobs/:id', async (req, res) => {
     let result = null;
     if (job.resultId) {
       const resultQuery = await query(
-        'SELECT id, created_at, status, routes, unassigned_passenger_ids FROM optimization_results WHERE id = $1',
-        [job.resultId],
+        `
+          SELECT id, created_at, status, routes, unassigned_passenger_ids
+          FROM optimization_results
+          WHERE id = $1 AND account_id = $2
+        `,
+        [job.resultId, req.auth.accountId],
       );
 
       if (resultQuery.rowCount > 0) {
@@ -252,6 +264,34 @@ router.get('/jobs/:id', async (req, res) => {
   } catch (err) {
     console.error('Failed to fetch optimization job', err);
     return res.status(500).json({ error: 'Failed to fetch optimization job' });
+  }
+});
+
+router.get('/history', requireAuth, async (req, res) => {
+  try {
+    const result = await query(
+      `
+        SELECT id, created_at, status, routes, unassigned_passenger_ids
+        FROM optimization_results
+        WHERE account_id = $1
+        ORDER BY created_at DESC
+        LIMIT 25
+      `,
+      [req.auth.accountId],
+    );
+
+    const history = result.rows.map((row) => ({
+      id: row.id,
+      createdAt: row.created_at,
+      status: row.status,
+      routes: row.routes,
+      unassignedPassengerIds: row.unassigned_passenger_ids,
+    }));
+
+    return res.json({ history });
+  } catch (err) {
+    console.error('Failed to fetch route history', err);
+    return res.status(500).json({ error: 'Failed to fetch route history' });
   }
 });
 
