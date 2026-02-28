@@ -1,0 +1,68 @@
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell {
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+  padding-inline: 1.25rem;
+  box-sizing: border-box;
+}
+
+.site-header {
+  border-bottom: 1px solid #1e293b;
+}
+
+.site-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 1.1rem;
+}
+
+.site-brand {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.site-nav {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.site-nav a {
+  color: #94a3b8;
+}
+
+.site-nav a:hover {
+  color: #e2e8f0;
+}
+
+.app-main {
+  flex: 1;
+}
+
+.site-footer {
+  border-top: 1px solid #1e293b;
+  margin-top: 2rem;
+}
+
+.site-footer-inner {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-block: 1rem;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.site-footer-inner p {
+  margin: 0;
+}
