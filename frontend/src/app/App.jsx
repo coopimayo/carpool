@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import LandingPage from '../pages/landing/LandingPage'
 import AuthPage from '../pages/auth/AuthPage'
+import RouteBuilderPage from '../pages/route-builder/RouteBuilderPage'
 import Header from '../components/layout/Header'
 import Footer from '../components/layout/Footer'
 import '../components/layout/layout.css'
@@ -84,7 +85,7 @@ function App() {
     setCurrentView('landing')
   }
 
-  async function handleCreateRoute() {
+  async function handleCreateRoute({ drivers, passengers, destination }) {
     if (!session.token) {
       setAuthError('Please log in to calculate and save routes')
       return
@@ -97,17 +98,10 @@ function App() {
       await apiRequest('/carpool/optimize', {
         method: 'POST',
         token: session.token,
-        body: {
-          drivers: [
-            { userId: 'demo-d1', name: 'Demo Driver', capacity: 3 },
-          ],
-          passengers: [
-            { userId: 'demo-p1', seatsRequired: 1 },
-            { userId: 'demo-p2', seatsRequired: 1 },
-          ],
-        },
+        body: { drivers, passengers, destination },
       })
       await loadHistory(session.token)
+      setCurrentView('landing')
     } catch (error) {
       setAuthError(error.message)
     } finally {
@@ -132,13 +126,19 @@ function App() {
             authError={authError}
             onAuthenticated={() => setCurrentView('landing')}
           />
+        ) : currentView === 'route-builder' ? (
+          <RouteBuilderPage
+            actionLoading={actionLoading}
+            authError={authError}
+            onSubmitRoute={handleCreateRoute}
+            onCancel={() => setCurrentView('landing')}
+          />
         ) : (
           <LandingPage
             account={session.account}
             history={history}
             historyLoading={historyLoading}
-            actionLoading={actionLoading}
-            onCreateRoute={handleCreateRoute}
+            onStartRouteBuilder={() => setCurrentView('route-builder')}
           />
         )}
       </main>

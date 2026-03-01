@@ -5,6 +5,7 @@ const usersRouter = require('./routes/users');
 const carpoolRouter = require('./routes/carpool');
 const routesRouter = require('./routes/routes');
 const authRouter = require('./routes/auth');
+const geocodeRouter = require('./routes/geocode');
 const { startOptimizationWorker } = require('./queue');
 
 const app = express();
@@ -25,6 +26,7 @@ app.use('/users', usersRouter);
 app.use('/carpool', carpoolRouter);
 app.use('/routes', routesRouter);
 app.use('/auth', authRouter);
+app.use('/geocode', geocodeRouter);
 
 app.use((err, req, res, next) => {
   if (err && err.type === 'entity.parse.failed') {

@@ -4,9 +4,10 @@ function LandingPage({
   account,
   history,
   historyLoading,
-  actionLoading,
-  onCreateRoute,
+  onStartRouteBuilder,
 }) {
+  const recentHistory = history.slice(0, 5)
+
   return (
     <div className="landing-page shell">
       <section className="hero">
@@ -25,22 +26,22 @@ function LandingPage({
 
         {account && (
           <div className="hero-actions">
-            <button className="primary-btn" onClick={onCreateRoute} disabled={actionLoading}>
-              {actionLoading ? 'Calculating...' : 'Calculate route'}
+            <button className="primary-btn" onClick={onStartRouteBuilder}>
+              Calculate route
             </button>
           </div>
         )}
 
         {account && (
           <section className="history-section">
-            <h2>Saved routes</h2>
+            <h2>Recent routes</h2>
             {historyLoading ? (
               <p className="history-empty">Loading route history…</p>
-            ) : history.length === 0 ? (
-              <p className="history-empty">No saved routes yet. Calculate your first route.</p>
+            ) : recentHistory.length === 0 ? (
+              <p className="history-empty">No routes yet. Calculate your first route.</p>
             ) : (
               <ul className="history-list">
-                {history.map((item) => (
+                {recentHistory.map((item) => (
                   <li key={item.id} className="history-item">
                     <p className="history-date">
                       {new Date(item.createdAt).toLocaleString()}
